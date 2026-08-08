@@ -31,10 +31,32 @@ typedef struct {
     GtkWidget *item_errors;
     GtkWidget *item_requests;
     char icon_dir[MAX_STR];
-    int icon_flip;
+    unsigned icon_serial;
 } TrayUI;
 
 static TrayUI g_tray;
+static GMutex g_net_mutex;
+static unsigned g_refresh_seq;
+static unsigned g_apply_seq;
+
+typedef struct {
+    unsigned seq;
+    bool ok;
+    WeatherData data;
+} RefreshResult;
+
+typedef struct {
+    unsigned seq;
+    Settings backup;
+} ApplyJob;
+
+typedef struct {
+    unsigned seq;
+    Settings backup;
+    bool loc_ok;
+    bool weather_ok;
+    WeatherData weather;
+} ApplyResult;
 
 static int round_temp(double temp) {
     if (temp >= 0) {
@@ -101,6 +123,42 @@ static void update_menu_labels(void) {
     gtk_menu_item_set_label(GTK_MENU_ITEM(g_tray.item_requests), buf);
 }
 
+static void update_tray_loading(void) {
+    if (!g_tray.weather_indicator || !g_tray.temp_indicator) {
+        return;
+    }
+
+    /* Unique names each time — StatusNotifier hosts cache by icon name. */
+    unsigned serial = ++g_tray.icon_serial;
+    char weather_name[64];
+    char temp_name[64];
+    snprintf(weather_name, sizeof(weather_name), "c-weather-load-%u", serial);
+    snprintf(temp_name, sizeof(temp_name), "c-weather-temp-%u", serial);
+
+    char weather_path[MAX_STR];
+    char temp_path[MAX_STR];
+    snprintf(weather_path, sizeof(weather_path), "%s/%s.png", g_tray.icon_dir,
+             weather_name);
+    snprintf(temp_path, sizeof(temp_path), "%s/%s.png", g_tray.icon_dir,
+             temp_name);
+
+    if (!icon_write_loading_png(weather_path)) {
+        fprintf(stderr, "Не удалось записать иконку загрузки\n");
+        return;
+    }
+    if (!icon_write_temp_png(temp_path, "...")) {
+        fprintf(stderr, "Не удалось записать иконку температуры\n");
+    }
+
+    app_indicator_set_icon_theme_path(g_tray.weather_indicator, g_tray.icon_dir);
+    app_indicator_set_icon_full(g_tray.weather_indicator, weather_name,
+                                "Loading");
+    app_indicator_set_icon_theme_path(g_tray.temp_indicator, g_tray.icon_dir);
+    app_indicator_set_icon_full(g_tray.temp_indicator, temp_name, "Loading");
+    app_indicator_set_title(g_tray.temp_indicator, "...");
+    app_indicator_set_label(g_tray.temp_indicator, "...", "99.9 °C");
+}
+
 static void update_tray_icons(void) {
     if (!g_tray.temp_indicator || !g_tray.item_temp) {
         return;
@@ -110,13 +168,11 @@ static void update_tray_icons(void) {
     format_temp_label(temp_label, sizeof(temp_label), g_app.weather.valid,
                       g_app.weather.temperature);
 
-    /* Alternate icon names so panels reload the file. */
-    g_tray.icon_flip = 1 - g_tray.icon_flip;
+    unsigned serial = ++g_tray.icon_serial;
     char temp_name[64];
     char weather_name[64];
-    snprintf(temp_name, sizeof(temp_name), "c-weather-temp-%d", g_tray.icon_flip);
-    snprintf(weather_name, sizeof(weather_name), "c-weather-code-%d",
-             g_tray.icon_flip);
+    snprintf(temp_name, sizeof(temp_name), "c-weather-temp-%u", serial);
+    snprintf(weather_name, sizeof(weather_name), "c-weather-code-%u", serial);
 
     char temp_path[MAX_STR];
     char weather_path[MAX_STR];
@@ -151,18 +207,48 @@ static void update_tray_icons(void) {
     update_menu_labels();
 }
 
-void app_request_refresh(void) {
-    WeatherData data;
-    if (!fetch_weather(&data)) {
+static gboolean on_refresh_done(gpointer user_data) {
+    RefreshResult *result = user_data;
+    if (result->seq != g_refresh_seq) {
+        g_free(result);
+        return G_SOURCE_REMOVE;
+    }
+
+    if (!result->ok) {
         fprintf(stderr, "Ошибка получения погоды\n");
         g_app.weather.valid = false;
-        update_tray_icons();
-        return;
+    } else {
+        g_app.weather = result->data;
+        g_app.last_update_time = time(NULL);
+        g_app.has_last_update = true;
     }
-    g_app.weather = data;
-    g_app.last_update_time = time(NULL);
-    g_app.has_last_update = true;
     update_tray_icons();
+    g_free(result);
+    return G_SOURCE_REMOVE;
+}
+
+static gpointer refresh_thread_fn(gpointer user_data) {
+    unsigned seq = GPOINTER_TO_UINT(user_data);
+    RefreshResult *result = g_new0(RefreshResult, 1);
+    result->seq = seq;
+
+    g_mutex_lock(&g_net_mutex);
+    result->ok = fetch_weather(&result->data);
+    g_mutex_unlock(&g_net_mutex);
+
+    g_idle_add(on_refresh_done, result);
+    return NULL;
+}
+
+void app_request_refresh(void) {
+    /*
+     * Network must not block the GTK/D-Bus loop — otherwise the panel never
+     * gets to paint the loading icon before the request finishes.
+     */
+    update_tray_loading();
+    g_refresh_seq++;
+    g_thread_unref(g_thread_new("weather-refresh", refresh_thread_fn,
+                                GUINT_TO_POINTER(g_refresh_seq)));
 }
 
 static gboolean on_update_timeout(gpointer user_data) {
@@ -183,6 +269,56 @@ static void restart_update_timer(void) {
     g_app.update_timer_id = g_timeout_add_seconds(seconds, on_update_timeout, NULL);
 }
 
+static gboolean on_apply_done(gpointer user_data) {
+    ApplyResult *result = user_data;
+    if (result->seq != g_apply_seq) {
+        g_free(result);
+        return G_SOURCE_REMOVE;
+    }
+
+    if (!result->loc_ok) {
+        g_app.settings = result->backup;
+        settings_save();
+        update_tray_icons();
+        ui_show_message(NULL, "Ошибка",
+                        "Не удалось инициализировать местоположение", true);
+        g_free(result);
+        return G_SOURCE_REMOVE;
+    }
+
+    restart_update_timer();
+    if (!result->weather_ok) {
+        fprintf(stderr, "Ошибка получения погоды\n");
+        g_app.weather.valid = false;
+    } else {
+        g_app.weather = result->weather;
+        g_app.last_update_time = time(NULL);
+        g_app.has_last_update = true;
+    }
+    update_tray_icons();
+    ui_show_message(NULL, "Успех", "Настройки сохранены", false);
+    g_free(result);
+    return G_SOURCE_REMOVE;
+}
+
+static gpointer apply_thread_fn(gpointer user_data) {
+    ApplyJob *job = user_data;
+    ApplyResult *result = g_new0(ApplyResult, 1);
+    result->seq = job->seq;
+    result->backup = job->backup;
+
+    g_mutex_lock(&g_net_mutex);
+    result->loc_ok = initialize_location();
+    if (result->loc_ok) {
+        result->weather_ok = fetch_weather(&result->weather);
+    }
+    g_mutex_unlock(&g_net_mutex);
+
+    g_free(job);
+    g_idle_add(on_apply_done, result);
+    return NULL;
+}
+
 bool app_apply_settings_and_refresh(const Settings *new_settings,
                                     GtkWindow *parent) {
     Settings backup = g_app.settings;
@@ -199,17 +335,15 @@ bool app_apply_settings_and_refresh(const Settings *new_settings,
     g_app.city_name[0] = '\0';
     g_app.country_name[0] = '\0';
 
-    if (!initialize_location()) {
-        g_app.settings = backup;
-        settings_save();
-        ui_show_message(parent, "Ошибка",
-                        "Не удалось инициализировать местоположение", true);
-        return false;
-    }
+    update_tray_loading();
+    /* Invalidate in-flight weather refresh; apply has its own sequence. */
+    g_refresh_seq++;
+    g_apply_seq++;
 
-    restart_update_timer();
-    app_request_refresh();
-    ui_show_message(parent, "Успех", "Настройки сохранены", false);
+    ApplyJob *job = g_new0(ApplyJob, 1);
+    job->seq = g_apply_seq;
+    job->backup = backup;
+    g_thread_unref(g_thread_new("weather-apply", apply_thread_fn, job));
     return true;
 }
 
@@ -363,6 +497,7 @@ static void cleanup_icon_dir(void) {
 int main(int argc, char **argv) {
     memset(&g_app, 0, sizeof(g_app));
     memset(&g_tray, 0, sizeof(g_tray));
+    g_mutex_init(&g_net_mutex);
 
     gtk_init(&argc, &argv);
     http_global_init();

@@ -132,3 +132,34 @@ bool icon_write_weather_png(const char *path, int weathercode) {
     cairo_surface_destroy(surface);
     return ok;
 }
+
+bool icon_write_loading_png(const char *path) {
+    const int size = 32;
+    cairo_surface_t *surface =
+        cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size, size);
+    cairo_t *cr = cairo_create(surface);
+
+    cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+    cairo_paint(cr);
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+
+    double cx = size / 2.0;
+    double cy = size / 2.0;
+    double r = 10.0;
+
+    cairo_set_line_width(cr, 3.0);
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+
+    cairo_set_source_rgba(cr, 0.65, 0.65, 0.65, 0.45);
+    cairo_arc(cr, cx, cy, r, 0, 2 * M_PI);
+    cairo_stroke(cr);
+
+    cairo_set_source_rgb(cr, 0.2, 0.5, 0.85);
+    cairo_arc(cr, cx, cy, r, -M_PI / 2.0, M_PI * 0.85);
+    cairo_stroke(cr);
+
+    cairo_destroy(cr);
+    bool ok = surface_to_png(surface, path);
+    cairo_surface_destroy(surface);
+    return ok;
+}
