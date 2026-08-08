@@ -50,9 +50,9 @@ static char *read_file(const char *path, size_t *out_len) {
     return buf;
 }
 
-static void json_copy_string(cJSON *obj, const char *key, char *dst, size_t n,
-                             bool *has) {
-    cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, key);
+static void json_copy_string(const cJSON *obj, const char *key, char *dst,
+                             size_t n, bool *has) {
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, key);
     if (cJSON_IsString(item) && item->valuestring && item->valuestring[0]) {
         snprintf(dst, n, "%s", item->valuestring);
         if (has) {
@@ -108,7 +108,7 @@ bool settings_load(void) {
     json_copy_string(root, "apiKey", s.api_key, sizeof(s.api_key),
                      &s.has_api_key);
 
-    cJSON *lat = cJSON_GetObjectItemCaseSensitive(root, "latitude");
+    const cJSON *lat = cJSON_GetObjectItemCaseSensitive(root, "latitude");
     if (cJSON_IsNumber(lat)) {
         s.latitude = lat->valuedouble;
         s.has_latitude = true;
@@ -116,7 +116,7 @@ bool settings_load(void) {
         s.has_latitude = false;
     }
 
-    cJSON *lon = cJSON_GetObjectItemCaseSensitive(root, "longitude");
+    const cJSON *lon = cJSON_GetObjectItemCaseSensitive(root, "longitude");
     if (cJSON_IsNumber(lon)) {
         s.longitude = lon->valuedouble;
         s.has_longitude = true;

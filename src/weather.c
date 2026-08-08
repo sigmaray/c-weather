@@ -1,5 +1,6 @@
 #include "weather.h"
 
+#include "compat.h"
 #include "history.h"
 #include "http.h"
 #include "settings.h"
@@ -7,7 +8,6 @@
 #include "../third_party/cJSON.h"
 
 #include <stdio.h>
-#include <strings.h>
 #include <string.h>
 
 int convert_owm_to_wmo(int owm_code) {
@@ -198,10 +198,10 @@ bool fetch_coordinates_by_city(const char *city, const char *country,
         chosen = cJSON_GetArrayItem(results, 0);
     }
 
-    cJSON *name = cJSON_GetObjectItemCaseSensitive(chosen, "name");
-    cJSON *ctry = cJSON_GetObjectItemCaseSensitive(chosen, "country");
-    cJSON *lat = cJSON_GetObjectItemCaseSensitive(chosen, "latitude");
-    cJSON *lon = cJSON_GetObjectItemCaseSensitive(chosen, "longitude");
+    const cJSON *name = cJSON_GetObjectItemCaseSensitive(chosen, "name");
+    const cJSON *ctry = cJSON_GetObjectItemCaseSensitive(chosen, "country");
+    const cJSON *lat = cJSON_GetObjectItemCaseSensitive(chosen, "latitude");
+    const cJSON *lon = cJSON_GetObjectItemCaseSensitive(chosen, "longitude");
     if (!cJSON_IsString(name) || !cJSON_IsNumber(lat) || !cJSON_IsNumber(lon)) {
         cJSON_Delete(root);
         return false;
@@ -247,27 +247,28 @@ bool fetch_location_by_coordinates(double lat, double lon, LocationData *out) {
         return false;
     }
 
-    cJSON *err = cJSON_GetObjectItemCaseSensitive(root, "error");
+    const cJSON *err = cJSON_GetObjectItemCaseSensitive(root, "error");
     if (cJSON_IsString(err)) {
         history_add_error("Nominatim API", err->valuestring, url, 200);
         cJSON_Delete(root);
         return false;
     }
 
-    cJSON *address = cJSON_GetObjectItemCaseSensitive(root, "address");
+    const cJSON *address = cJSON_GetObjectItemCaseSensitive(root, "address");
     const char *city = NULL;
     const char *country_name = NULL;
     if (cJSON_IsObject(address)) {
         const char *keys[] = {"city", "town", "village", "municipality",
                               "county", NULL};
         for (int i = 0; keys[i]; i++) {
-            cJSON *v = cJSON_GetObjectItemCaseSensitive(address, keys[i]);
+            const cJSON *v =
+                cJSON_GetObjectItemCaseSensitive(address, keys[i]);
             if (cJSON_IsString(v) && v->valuestring[0]) {
                 city = v->valuestring;
                 break;
             }
         }
-        cJSON *c = cJSON_GetObjectItemCaseSensitive(address, "country");
+        const cJSON *c = cJSON_GetObjectItemCaseSensitive(address, "country");
         if (cJSON_IsString(c)) {
             country_name = c->valuestring;
         }
@@ -277,7 +278,8 @@ bool fetch_location_by_coordinates(double lat, double lon, LocationData *out) {
     if (city) {
         snprintf(out->city_name, sizeof(out->city_name), "%s", city);
     } else {
-        cJSON *display = cJSON_GetObjectItemCaseSensitive(root, "display_name");
+        const cJSON *display =
+            cJSON_GetObjectItemCaseSensitive(root, "display_name");
         if (cJSON_IsString(display)) {
             snprintf(out->city_name, sizeof(out->city_name), "%s",
                      display->valuestring);
@@ -342,9 +344,10 @@ bool fetch_weather(WeatherData *out) {
     }
 
     if (use_owm) {
-        cJSON *main = cJSON_GetObjectItemCaseSensitive(root, "main");
-        cJSON *temp = main ? cJSON_GetObjectItemCaseSensitive(main, "temp") : NULL;
-        cJSON *weather = cJSON_GetObjectItemCaseSensitive(root, "weather");
+        const cJSON *main = cJSON_GetObjectItemCaseSensitive(root, "main");
+        const cJSON *temp =
+            main ? cJSON_GetObjectItemCaseSensitive(main, "temp") : NULL;
+        const cJSON *weather = cJSON_GetObjectItemCaseSensitive(root, "weather");
         if (!cJSON_IsNumber(temp)) {
             cJSON_Delete(root);
             return false;
@@ -352,17 +355,18 @@ bool fetch_weather(WeatherData *out) {
         out->temperature = temp->valuedouble;
         out->weathercode = 0;
         if (cJSON_IsArray(weather) && cJSON_GetArraySize(weather) > 0) {
-            cJSON *w0 = cJSON_GetArrayItem(weather, 0);
-            cJSON *id = cJSON_GetObjectItemCaseSensitive(w0, "id");
+            const cJSON *w0 = cJSON_GetArrayItem(weather, 0);
+            const cJSON *id = cJSON_GetObjectItemCaseSensitive(w0, "id");
             if (cJSON_IsNumber(id)) {
                 out->weathercode = convert_owm_to_wmo((int)id->valuedouble);
             }
         }
     } else {
-        cJSON *cw = cJSON_GetObjectItemCaseSensitive(root, "current_weather");
-        cJSON *temp =
+        const cJSON *cw =
+            cJSON_GetObjectItemCaseSensitive(root, "current_weather");
+        const cJSON *temp =
             cw ? cJSON_GetObjectItemCaseSensitive(cw, "temperature") : NULL;
-        cJSON *code =
+        const cJSON *code =
             cw ? cJSON_GetObjectItemCaseSensitive(cw, "weathercode") : NULL;
         if (!cJSON_IsNumber(temp)) {
             cJSON_Delete(root);

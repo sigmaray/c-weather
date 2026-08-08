@@ -12,6 +12,7 @@ typedef struct {
     size_t size;
 } WriteBuffer;
 
+/* curl CURLOPT_WRITEFUNCTION requires non-const char* */
 static size_t write_cb(char *ptr, size_t size, size_t nmemb, void *userdata) {
     WriteBuffer *buf = userdata;
     size_t total = size * nmemb;

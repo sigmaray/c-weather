@@ -1,4 +1,5 @@
 #include "app.h"
+#include "compat.h"
 #include "history.h"
 #include "http.h"
 #include "icon.h"
@@ -9,6 +10,7 @@
 #include <libayatana-appindicator/app-indicator.h>
 
 #include <gtk/gtk.h>
+#include <glib/gstdio.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,7 +76,7 @@ static void format_temp_label(char *buf, size_t n, bool ok, double temp) {
 }
 
 static void update_menu_labels(void) {
-    char buf[256];
+    char buf[MAX_STR * 2 + 64];
     if (g_app.weather.valid) {
         snprintf(buf, sizeof(buf), "Текущая температура: %.1f °C",
                  g_app.weather.temperature);
@@ -135,15 +137,18 @@ static void update_tray_loading(void) {
     snprintf(weather_name, sizeof(weather_name), "c-weather-load-%u", serial);
     snprintf(temp_name, sizeof(temp_name), "c-weather-temp-%u", serial);
 
-    char weather_path[MAX_STR];
-    char temp_path[MAX_STR];
-    snprintf(weather_path, sizeof(weather_path), "%s/%s.png", g_tray.icon_dir,
-             weather_name);
-    snprintf(temp_path, sizeof(temp_path), "%s/%s.png", g_tray.icon_dir,
-             temp_name);
+    gchar *weather_file = g_strdup_printf("%s.png", weather_name);
+    gchar *temp_file = g_strdup_printf("%s.png", temp_name);
+    gchar *weather_path =
+        g_build_filename(g_tray.icon_dir, weather_file, NULL);
+    gchar *temp_path = g_build_filename(g_tray.icon_dir, temp_file, NULL);
+    g_free(weather_file);
+    g_free(temp_file);
 
     if (!icon_write_loading_png(weather_path)) {
         fprintf(stderr, "Не удалось записать иконку загрузки\n");
+        g_free(weather_path);
+        g_free(temp_path);
         return;
     }
     if (!icon_write_temp_png(temp_path, "...")) {
@@ -157,6 +162,9 @@ static void update_tray_loading(void) {
     app_indicator_set_icon_full(g_tray.temp_indicator, temp_name, "Loading");
     app_indicator_set_title(g_tray.temp_indicator, "...");
     app_indicator_set_label(g_tray.temp_indicator, "...", "99.9 °C");
+
+    g_free(weather_path);
+    g_free(temp_path);
 }
 
 static void update_tray_icons(void) {
@@ -174,12 +182,13 @@ static void update_tray_icons(void) {
     snprintf(temp_name, sizeof(temp_name), "c-weather-temp-%u", serial);
     snprintf(weather_name, sizeof(weather_name), "c-weather-code-%u", serial);
 
-    char temp_path[MAX_STR];
-    char weather_path[MAX_STR];
-    snprintf(temp_path, sizeof(temp_path), "%s/%s.png", g_tray.icon_dir,
-             temp_name);
-    snprintf(weather_path, sizeof(weather_path), "%s/%s.png", g_tray.icon_dir,
-             weather_name);
+    gchar *temp_file = g_strdup_printf("%s.png", temp_name);
+    gchar *weather_file = g_strdup_printf("%s.png", weather_name);
+    gchar *temp_path = g_build_filename(g_tray.icon_dir, temp_file, NULL);
+    gchar *weather_path =
+        g_build_filename(g_tray.icon_dir, weather_file, NULL);
+    g_free(temp_file);
+    g_free(weather_file);
 
     if (!icon_write_temp_png(temp_path, temp_label)) {
         fprintf(stderr, "Не удалось записать иконку температуры\n");
@@ -203,6 +212,9 @@ static void update_tray_icons(void) {
     }
     app_indicator_set_title(g_tray.temp_indicator, title);
     app_indicator_set_label(g_tray.temp_indicator, title, "99.9 °C");
+
+    g_free(temp_path);
+    g_free(weather_path);
 
     update_menu_labels();
 }
@@ -406,17 +418,20 @@ static GtkWidget *add_action_item(GtkWidget *menu, const char *label,
 
 static void create_tray(void) {
     const char *tmpdir = g_get_tmp_dir();
-    snprintf(g_tray.icon_dir, sizeof(g_tray.icon_dir), "%s/c-weather-%d", tmpdir,
-             (int)getpid());
+    gchar *icon_dir =
+        g_strdup_printf("%s/c-weather-%d", tmpdir, (int)getpid());
+    g_strlcpy(g_tray.icon_dir, icon_dir, sizeof(g_tray.icon_dir));
+    g_free(icon_dir);
     g_mkdir_with_parents(g_tray.icon_dir, 0700);
 
-    char placeholder[MAX_STR];
-    snprintf(placeholder, sizeof(placeholder), "%s/c-weather-temp-0.png",
-             g_tray.icon_dir);
+    gchar *placeholder =
+        g_build_filename(g_tray.icon_dir, "c-weather-temp-0.png", NULL);
     icon_write_temp_png(placeholder, "--");
-    snprintf(placeholder, sizeof(placeholder), "%s/c-weather-code-0.png",
-             g_tray.icon_dir);
+    g_free(placeholder);
+    placeholder =
+        g_build_filename(g_tray.icon_dir, "c-weather-code-0.png", NULL);
     icon_write_weather_png(placeholder, -1);
+    g_free(placeholder);
 
     g_tray.temp_indicator = app_indicator_new_with_path(
         "c-weather-temp", "c-weather-temp-0",
@@ -487,11 +502,17 @@ static void cleanup_icon_dir(void) {
     if (!g_tray.icon_dir[0]) {
         return;
     }
-    char cmd[MAX_STR + 32];
-    snprintf(cmd, sizeof(cmd), "rm -rf '%s'", g_tray.icon_dir);
-    if (system(cmd) != 0) {
-        /* best-effort cleanup */
+    GDir *dir = g_dir_open(g_tray.icon_dir, 0, NULL);
+    if (dir) {
+        const gchar *name;
+        while ((name = g_dir_read_name(dir)) != NULL) {
+            gchar *path = g_build_filename(g_tray.icon_dir, name, NULL);
+            g_unlink(path);
+            g_free(path);
+        }
+        g_dir_close(dir);
     }
+    g_rmdir(g_tray.icon_dir);
 }
 
 int main(int argc, char **argv) {
@@ -506,9 +527,9 @@ int main(int argc, char **argv) {
     if (!getcwd(cwd, sizeof(cwd))) {
         snprintf(cwd, sizeof(cwd), ".");
     }
-    char path[MAX_STR];
-    snprintf(path, sizeof(path), "%s/settings.json", cwd);
+    gchar *path = g_build_filename(cwd, "settings.json", NULL);
     settings_set_path(path);
+    g_free(path);
     settings_load();
 
     create_tray();

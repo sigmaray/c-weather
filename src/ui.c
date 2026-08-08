@@ -1,6 +1,7 @@
 #include "ui.h"
 
 #include "app.h"
+#include "compat.h"
 #include "history.h"
 #include "settings.h"
 #include "weather.h"
@@ -395,7 +396,7 @@ void ui_show_weather_details(GtkWindow *parent) {
     double temp = g_app.weather.valid ? g_app.weather.temperature : 0.0;
     int code = g_app.weather.valid ? g_app.weather.weathercode : -1;
 
-    char text[1024];
+    char text[MAX_STR * 2 + 512];
     snprintf(text, sizeof(text),
              "Подробная информация о погоде\n\n"
              "Местоположение\n"

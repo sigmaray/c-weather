@@ -5,7 +5,7 @@
 #include <time.h>
 
 #define MAX_STR 512
-#define MAX_URL 2048
+#define MAX_URL 4096
 #define MAX_API_ERRORS 20
 #define MAX_API_REQUESTS 20
 
