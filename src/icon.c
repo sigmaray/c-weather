@@ -15,7 +15,7 @@ static bool surface_to_png(cairo_surface_t *surface, const char *path) {
 }
 
 bool icon_write_temp_png(const char *path, const char *label) {
-    const int size = 32;
+    const int size = 128;
     cairo_surface_t *surface =
         cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size, size);
     cairo_t *cr = cairo_create(surface);
@@ -24,7 +24,7 @@ bool icon_write_temp_png(const char *path, const char *label) {
     cairo_paint(cr);
     cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 
-    bool muted = (strcmp(label, "--") == 0 || strcmp(label, "NA") == 0);
+    bool muted = (strcmp(label, "--") == 0 || strcmp(label, "NA") == 0 || strcmp(label, "...") == 0);
     if (muted) {
         cairo_set_source_rgb(cr, 0.6, 0.6, 0.6); /* #999 */
     } else {
@@ -33,11 +33,18 @@ bool icon_write_temp_png(const char *path, const char *label) {
 
     cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL,
                            CAIRO_FONT_WEIGHT_BOLD);
-    double font_size = (strlen(label) >= 4) ? 11.0 : 13.0;
-    cairo_set_font_size(cr, font_size);
-
+    
+    double font_size = size;
     cairo_text_extents_t ext;
-    cairo_text_extents(cr, label, &ext);
+    while (font_size > 5.0) {
+        cairo_set_font_size(cr, font_size);
+        cairo_text_extents(cr, label, &ext);
+        if (ext.width <= size * 0.9 && ext.height <= size * 0.9) {
+            break;
+        }
+        font_size -= 1.0;
+    }
+
     double x = (size - ext.width) / 2.0 - ext.x_bearing;
     double y = (size - ext.height) / 2.0 - ext.y_bearing;
     cairo_move_to(cr, x, y);
@@ -50,7 +57,7 @@ bool icon_write_temp_png(const char *path, const char *label) {
 }
 
 bool icon_write_weather_png(const char *path, int weathercode) {
-    const int size = 32;
+    const int size = 128;
     cairo_surface_t *surface =
         cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size, size);
     cairo_t *cr = cairo_create(surface);
@@ -59,8 +66,10 @@ bool icon_write_weather_png(const char *path, int weathercode) {
     cairo_paint(cr);
     cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 
-    double cx = size / 2.0;
-    double cy = size / 2.0;
+    cairo_scale(cr, size / 32.0, size / 32.0);
+
+    double cx = 16.0;
+    double cy = 16.0;
 
     if (weathercode == 0 || weathercode == 1) {
         cairo_set_source_rgb(cr, 0.95, 0.75, 0.1);
@@ -122,8 +131,8 @@ bool icon_write_weather_png(const char *path, int weathercode) {
         cairo_set_font_size(cr, 16);
         cairo_text_extents_t ext;
         cairo_text_extents(cr, "?", &ext);
-        cairo_move_to(cr, (size - ext.width) / 2.0 - ext.x_bearing,
-                      (size - ext.height) / 2.0 - ext.y_bearing);
+        cairo_move_to(cr, (32.0 - ext.width) / 2.0 - ext.x_bearing,
+                      (32.0 - ext.height) / 2.0 - ext.y_bearing);
         cairo_show_text(cr, "?");
     }
 
@@ -134,7 +143,7 @@ bool icon_write_weather_png(const char *path, int weathercode) {
 }
 
 bool icon_write_loading_png(const char *path) {
-    const int size = 32;
+    const int size = 128;
     cairo_surface_t *surface =
         cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size, size);
     cairo_t *cr = cairo_create(surface);
@@ -143,8 +152,10 @@ bool icon_write_loading_png(const char *path) {
     cairo_paint(cr);
     cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 
-    double cx = size / 2.0;
-    double cy = size / 2.0;
+    cairo_scale(cr, size / 32.0, size / 32.0);
+
+    double cx = 16.0;
+    double cy = 16.0;
     double r = 10.0;
 
     cairo_set_line_width(cr, 3.0);
