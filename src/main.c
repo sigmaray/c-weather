@@ -183,7 +183,7 @@ static void restart_update_timer(void) {
     g_app.update_timer_id = g_timeout_add_seconds(seconds, on_update_timeout, NULL);
 }
 
-void app_apply_settings_and_refresh(const Settings *new_settings,
+bool app_apply_settings_and_refresh(const Settings *new_settings,
                                     GtkWindow *parent) {
     Settings backup = g_app.settings;
     g_app.settings = *new_settings;
@@ -192,7 +192,7 @@ void app_apply_settings_and_refresh(const Settings *new_settings,
         g_app.settings = backup;
         ui_show_message(parent, "Ошибка", "Не удалось сохранить settings.json",
                         true);
-        return;
+        return false;
     }
 
     g_app.has_coords = false;
@@ -204,12 +204,13 @@ void app_apply_settings_and_refresh(const Settings *new_settings,
         settings_save();
         ui_show_message(parent, "Ошибка",
                         "Не удалось инициализировать местоположение", true);
-        return;
+        return false;
     }
 
     restart_update_timer();
     app_request_refresh();
     ui_show_message(parent, "Успех", "Настройки сохранены", false);
+    return true;
 }
 
 static void on_refresh(GtkMenuItem *item, gpointer data) {

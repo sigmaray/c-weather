@@ -380,8 +380,8 @@ bool fetch_weather(WeatherData *out) {
 bool initialize_location(void) {
     Settings *s = &g_app.settings;
 
-    if ((!s->has_latitude || !s->has_longitude) && s->has_city &&
-        s->has_country) {
+    /* City+country mode: resolve coords at runtime only — do not persist them. */
+    if (s->has_city && s->has_country) {
         fprintf(stderr, "Определение координат для %s, %s...\n", s->city,
                 s->country);
         LocationData loc;
@@ -396,14 +396,12 @@ bool initialize_location(void) {
         snprintf(g_app.country_name, sizeof(g_app.country_name), "%s",
                  loc.country_name);
 
-        s->latitude = loc.latitude;
-        s->longitude = loc.longitude;
-        s->has_latitude = true;
-        s->has_longitude = true;
-        /* Keep city/country mode exclusive in file like TS after resolve:
-         * go-weather saves coords alongside city — we keep both for simplicity
-         * matching go-weather. */
-        settings_save();
+        /* Drop any leftover coords from older builds so settings stay exclusive. */
+        if (s->has_latitude || s->has_longitude) {
+            s->has_latitude = false;
+            s->has_longitude = false;
+            settings_save();
+        }
 
         fprintf(stderr, "Координаты определены: %f, %f\n", g_app.latitude,
                 g_app.longitude);

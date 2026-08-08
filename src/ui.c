@@ -11,7 +11,7 @@
 #include <time.h>
 
 /* Declared in main.c */
-void app_apply_settings_and_refresh(const Settings *new_settings,
+bool app_apply_settings_and_refresh(const Settings *new_settings,
                                     GtkWindow *parent);
 void app_request_refresh(void);
 
@@ -26,12 +26,17 @@ void ui_show_message(GtkWindow *parent, const char *title, const char *message,
     gtk_widget_destroy(dialog);
 }
 
-static GtkWidget *make_scrolled_label(const char *text, int w, int h) {
+static GtkWidget *make_scrolled_label(const char *text, int w, int h,
+                                      bool selectable) {
     GtkWidget *label = gtk_label_new(text);
     gtk_label_set_xalign(GTK_LABEL(label), 0.0);
     gtk_label_set_yalign(GTK_LABEL(label), 0.0);
     gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
-    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+    gtk_label_set_selectable(GTK_LABEL(label), selectable);
+    /* Selectable labels grab focus and select-all on open; keep mouse copy. */
+    if (selectable) {
+        gtk_widget_set_can_focus(label, FALSE);
+    }
 
     GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
@@ -132,7 +137,9 @@ static void on_settings_save(GtkButton *button, gpointer user_data) {
         return;
     }
 
-    app_apply_settings_and_refresh(&s, GTK_WINDOW(w->window));
+    if (app_apply_settings_and_refresh(&s, GTK_WINDOW(w->window))) {
+        gtk_widget_destroy(w->window);
+    }
 }
 
 static void on_quick_city(GtkButton *button, gpointer user_data) {
@@ -194,18 +201,20 @@ void ui_show_settings(GtkWindow *parent) {
                                    "openweathermap");
 
     const Settings *s = &g_app.settings;
+    bool city_mode = s->has_city && s->has_country;
     if (s->has_city) {
         gtk_entry_set_text(GTK_ENTRY(w->city), s->city);
     }
     if (s->has_country) {
         gtk_entry_set_text(GTK_ENTRY(w->country), s->country);
     }
-    if (s->has_latitude) {
+    /* In city mode coords are runtime-only and must not appear in the form. */
+    if (!city_mode && s->has_latitude) {
         char buf[64];
         snprintf(buf, sizeof(buf), "%.6f", s->latitude);
         gtk_entry_set_text(GTK_ENTRY(w->lat), buf);
     }
-    if (s->has_longitude) {
+    if (!city_mode && s->has_longitude) {
         char buf[64];
         snprintf(buf, sizeof(buf), "%.6f", s->longitude);
         gtk_entry_set_text(GTK_ENTRY(w->lon), buf);
@@ -291,7 +300,8 @@ void ui_show_help(GtkWindow *parent) {
     gtk_window_set_title(GTK_WINDOW(win), "Как пользоваться");
     gtk_window_set_default_size(GTK_WINDOW(win), 640, 480);
     gtk_window_set_transient_for(GTK_WINDOW(win), parent);
-    gtk_container_add(GTK_CONTAINER(win), make_scrolled_label(text, 620, 460));
+    gtk_container_add(GTK_CONTAINER(win),
+                      make_scrolled_label(text, 620, 460, false));
     gtk_widget_show_all(win);
 }
 
@@ -326,7 +336,7 @@ void ui_show_errors(GtkWindow *parent) {
     gtk_window_set_default_size(GTK_WINDOW(win), 720, 480);
     gtk_window_set_transient_for(GTK_WINDOW(win), parent);
     gtk_container_add(GTK_CONTAINER(win),
-                      make_scrolled_label(text->str, 700, 460));
+                      make_scrolled_label(text->str, 700, 460, true));
     g_string_free(text, TRUE);
     gtk_widget_show_all(win);
 }
@@ -363,7 +373,7 @@ void ui_show_requests(GtkWindow *parent) {
     gtk_window_set_default_size(GTK_WINDOW(win), 720, 480);
     gtk_window_set_transient_for(GTK_WINDOW(win), parent);
     gtk_container_add(GTK_CONTAINER(win),
-                      make_scrolled_label(text->str, 700, 460));
+                      make_scrolled_label(text->str, 700, 460, true));
     g_string_free(text, TRUE);
     gtk_widget_show_all(win);
 }
@@ -404,6 +414,7 @@ void ui_show_weather_details(GtkWindow *parent) {
     gtk_window_set_title(GTK_WINDOW(win), "Подробная информация о погоде");
     gtk_window_set_default_size(GTK_WINDOW(win), 480, 360);
     gtk_window_set_transient_for(GTK_WINDOW(win), parent);
-    gtk_container_add(GTK_CONTAINER(win), make_scrolled_label(text, 460, 340));
+    gtk_container_add(GTK_CONTAINER(win),
+                      make_scrolled_label(text, 460, 340, true));
     gtk_widget_show_all(win);
 }
