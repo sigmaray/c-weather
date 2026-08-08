@@ -31,6 +31,14 @@ make
 ./c-weather
 ```
 
+Портативная / «статическая» сборка:
+
+```bash
+make STATIC=1
+```
+
+`STATIC=1` включает `-static-libgcc` (на Windows также static libstdc++/winpthread и static libcurl, где доступно). Полностью статически слинковать GTK из дистрибутивных пакетов нельзя — в релизе GTK уезжает внутри AppImage / zip / tar.gz.
+
 Линтер:
 
 ```bash
@@ -46,9 +54,10 @@ make lint   # требует cppcheck
 GitHub Actions:
 
 - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — `cppcheck`, сборка с `-Werror` (Ubuntu gcc/clang, macOS, Windows)
-- [`.github/workflows/release.yml`](.github/workflows/release.yml) — после каждого пуша в `main` создаётся GitHub Release с бинарниками Linux / macOS / Windows
-
-Бинарники динамически линкуются (нужны системные GTK/curl; на Linux ещё AppIndicator).
+- [`.github/workflows/release.yml`](.github/workflows/release.yml) — после каждого пуша в `main` релиз с портативными артефактами (`STATIC=1`):
+  - Linux: `.AppImage` (GTK/curl внутри)
+  - Windows: `.zip` (exe + MinGW DLL)
+  - macOS: `.tar.gz` (бинарь + dylib)
 
 ## Настройки
 
@@ -87,6 +96,7 @@ c-weather/
 ├── README.md
 ├── .github/workflows/ci.yml
 ├── .github/workflows/release.yml
+├── packaging/              # desktop, AppImage/DLL/dylib bundlers
 ├── include/libayatana-appindicator/app-indicator.h
 ├── third_party/cJSON.{c,h}
 └── src/

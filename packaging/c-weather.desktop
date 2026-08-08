@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=C Weather
+Comment=Tray weather temperature
+Exec=c-weather
+Icon=c-weather
+Terminal=false
+Categories=Utility;Monitor;
+StartupNotify=false

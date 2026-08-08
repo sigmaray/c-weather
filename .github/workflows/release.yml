@@ -39,7 +39,11 @@ jobs:
             libgtk-3-dev \
             libcurl4-openssl-dev \
             libayatana-appindicator3-dev \
-            libcairo2-dev
+            libcairo2-dev \
+            librsvg2-dev \
+            wget \
+            file \
+            imagemagick
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -53,35 +57,78 @@ jobs:
           update: true
           install: >-
             make
+            zip
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-pkgconf
             mingw-w64-x86_64-gtk3
             mingw-w64-x86_64-curl
 
-      - name: Build
+      - name: Build (static-preferring link)
         env:
           CFLAGS: -O2 -Werror
+          STATIC: "1"
         run: |
           make clean
-          make
+          make STATIC=1
 
-      - name: Package binary (Unix)
-        if: runner.os != 'Windows'
+      - name: Package Linux AppImage
+        if: runner.os == 'Linux'
+        env:
+          DEPLOY_GTK_VERSION: "3"
         run: |
+          set -euo pipefail
           arch="$(uname -m)"
-          case "${{ runner.os }}" in
-            macOS) out="c-weather-macos-${arch}" ;;
-            *)     out="c-weather-linux-${arch}" ;;
-          esac
-          cp c-weather "$out"
+          out="c-weather-linux-${arch}.AppImage"
+
+          convert -size 256x256 xc:'#2B6CB0' -fill white -gravity center \
+            -pointsize 96 -annotate 0 'W' packaging/c-weather.png
+
+          mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
+          cp c-weather AppDir/usr/bin/
+          cp packaging/c-weather.desktop AppDir/usr/share/applications/
+          cp packaging/c-weather.png AppDir/usr/share/icons/hicolor/256x256/apps/c-weather.png
+          cp packaging/c-weather.png AppDir/c-weather.png
+
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${arch}.AppImage
+          wget -q https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
+          chmod +x linuxdeploy-${arch}.AppImage linuxdeploy-plugin-gtk.sh packaging/*.sh
+
+          # GitHub-hosted runners often lack FUSE for AppImages.
+          ./linuxdeploy-${arch}.AppImage --appimage-extract
+          ./squashfs-root/AppRun \
+            --appdir AppDir \
+            --executable AppDir/usr/bin/c-weather \
+            --desktop-file packaging/c-weather.desktop \
+            --icon-file packaging/c-weather.png \
+            --plugin gtk \
+            --output appimage
+
+          built="$(ls -1 c-weather*.AppImage | head -n1)"
+          mv "$built" "$out"
           chmod +x "$out"
           echo "ASSET_NAME=$out" >> "$GITHUB_ENV"
 
-      - name: Package binary (Windows)
+      - name: Package macOS bundle
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          arch="$(uname -m)"
+          out="c-weather-macos-${arch}.tar.gz"
+          chmod +x packaging/macos-bundle-dylibs.sh
+          rm -rf dist-macos
+          packaging/macos-bundle-dylibs.sh ./c-weather dist-macos
+          tar -C dist-macos -czf "$out" .
+          echo "ASSET_NAME=$out" >> "$GITHUB_ENV"
+
+      - name: Package Windows zip
         if: runner.os == 'Windows'
         run: |
-          out="c-weather-windows-x86_64.exe"
-          cp c-weather.exe "$out"
+          set -euo pipefail
+          out="c-weather-windows-x86_64.zip"
+          chmod +x packaging/windows-bundle-dlls.sh
+          rm -rf dist-win
+          packaging/windows-bundle-dlls.sh ./c-weather.exe dist-win
+          (cd dist-win && zip -r "../$out" .)
           echo "ASSET_NAME=$out" >> "$GITHUB_ENV"
 
       - name: Upload artifact
@@ -112,7 +159,7 @@ jobs:
           short_sha="$(echo "${GITHUB_SHA}" | cut -c1-7)"
           tag="main-${short_sha}"
           title="main @ ${short_sha}"
-          body="$(printf '%s\n\nCommit: %s\n\nBinaries are dynamically linked; install GTK 3, libcurl, and (on Linux) Ayatana AppIndicator to run.\nmacOS/Windows builds use a stub AppIndicator (no tray icon).' \
+          body="$(printf '%s\n\nCommit: %s\n\nPortable builds (STATIC=1):\n- Linux: AppImage (GTK/curl bundled)\n- Windows: zip with exe + MinGW DLLs\n- macOS: tar.gz with binary + bundled dylibs\n\nFull `-static` of GTK is not available from distro packages; runtime/C library and curl are linked statically where possible.\nmacOS/Windows builds use a stub AppIndicator (no tray icon).' \
             "$(git log -1 --pretty=%B)" "${GITHUB_SHA}")"
 
           ls -la dist/

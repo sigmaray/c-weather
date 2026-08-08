@@ -1,10 +1,11 @@
 CC ?= gcc
+STATIC ?= 0
 
 UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
 # MSYS2/MinGW report MINGW64_NT-*, MSYS_NT-*, etc.
 IS_WINDOWS := $(shell echo "$(UNAME_S)" | grep -qiE 'mingw|msys|cygwin' && echo 1 || echo 0)
 
-PKG_MODULES := gtk+-3.0 libcurl
+PKG_CONFIG := $(shell command -v pkg-config 2>/dev/null)
 APPINDICATOR_PKG := ayatana-appindicator3-0.1
 
 USE_APPINDICATOR_STUB := 0
@@ -15,8 +16,23 @@ ifeq ($(UNAME_S),Darwin)
   USE_APPINDICATOR_STUB := 1
 endif
 
-PKG_CFLAGS := $(shell command -v pkg-config >/dev/null 2>&1 && pkg-config --cflags $(PKG_MODULES) 2>/dev/null)
-PKG_LIBS := $(shell command -v pkg-config >/dev/null 2>&1 && pkg-config --libs $(PKG_MODULES) 2>/dev/null)
+PKG_CFLAGS := $(shell test -n "$(PKG_CONFIG)" && $(PKG_CONFIG) --cflags gtk+-3.0 libcurl 2>/dev/null)
+
+# Full static GTK is not available from distro packages. STATIC=1 means:
+#   - static libgcc (/libstdc++/winpthread on Windows)
+#   - on Windows: prefer static libcurl via pkg-config --static
+#   - GTK/GLib remain shared and are shipped by release packaging
+#     (AppImage / DLL zip / dylib tarball).
+ifeq ($(STATIC),1)
+  ifeq ($(IS_WINDOWS),1)
+    PKG_LIBS := $(shell test -n "$(PKG_CONFIG)" && $(PKG_CONFIG) --libs gtk+-3.0 2>/dev/null) \
+	$(shell test -n "$(PKG_CONFIG)" && $(PKG_CONFIG) --static --libs libcurl 2>/dev/null)
+  else
+    PKG_LIBS := $(shell test -n "$(PKG_CONFIG)" && $(PKG_CONFIG) --libs gtk+-3.0 libcurl 2>/dev/null)
+  endif
+else
+  PKG_LIBS := $(shell test -n "$(PKG_CONFIG)" && $(PKG_CONFIG) --libs gtk+-3.0 libcurl 2>/dev/null)
+endif
 
 APPINDICATOR_CFLAGS :=
 APPINDICATOR_LIBS :=
@@ -25,9 +41,9 @@ SRCS_EXTRA :=
 ifeq ($(USE_APPINDICATOR_STUB),1)
   SRCS_EXTRA += src/appindicator_stub.c
 else
-  ifeq ($(shell command -v pkg-config >/dev/null 2>&1 && pkg-config --exists $(APPINDICATOR_PKG) && echo yes),yes)
-    APPINDICATOR_CFLAGS := $(shell pkg-config --cflags $(APPINDICATOR_PKG))
-    APPINDICATOR_LIBS := $(shell pkg-config --libs $(APPINDICATOR_PKG))
+  ifeq ($(shell test -n "$(PKG_CONFIG)" && $(PKG_CONFIG) --exists $(APPINDICATOR_PKG) && echo yes),yes)
+    APPINDICATOR_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(APPINDICATOR_PKG))
+    APPINDICATOR_LIBS := $(shell $(PKG_CONFIG) --libs $(APPINDICATOR_PKG))
   else
     APPINDICATOR_LIB ?= /usr/lib/x86_64-linux-gnu/libayatana-appindicator3.so.1
     APPINDICATOR_LIBS := $(APPINDICATOR_LIB)
@@ -39,6 +55,14 @@ CFLAGS ?= -O2
 ALL_CFLAGS = $(CFLAGS) $(BASE_CFLAGS)
 LDFLAGS ?=
 LIBS := $(PKG_LIBS) $(APPINDICATOR_LIBS) -lm
+
+ifeq ($(STATIC),1)
+  LDFLAGS += -static-libgcc
+  ifeq ($(IS_WINDOWS),1)
+    LDFLAGS += -static-libstdc++
+    LIBS += -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic
+  endif
+endif
 
 SRCS := \
 	src/main.c \
