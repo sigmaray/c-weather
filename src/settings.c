@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "log.h"
 
 #include "../third_party/cJSON.h"
 
@@ -70,17 +71,17 @@ bool settings_load(void) {
     if (access(g_app.settings_path, F_OK) != 0) {
         settings_apply_defaults(&g_app.settings);
         if (!settings_save()) {
-            fprintf(stderr, "Не удалось создать %s\n", g_app.settings_path);
+            log_errf("Не удалось создать %s\n", g_app.settings_path);
             return false;
         }
-        fprintf(stderr, "Создан файл settings.json с дефолтными значениями: %s\n",
-                g_app.settings_path);
+        log_errf("Создан файл settings.json с дефолтными значениями: %s\n",
+                 g_app.settings_path);
         return true;
     }
 
     char *data = read_file(g_app.settings_path, NULL);
     if (!data) {
-        fprintf(stderr, "Ошибка чтения %s\n", g_app.settings_path);
+        log_errf("Ошибка чтения %s\n", g_app.settings_path);
         settings_apply_defaults(&g_app.settings);
         return false;
     }
@@ -88,7 +89,7 @@ bool settings_load(void) {
     cJSON *root = cJSON_Parse(data);
     free(data);
     if (!root) {
-        fprintf(stderr, "Ошибка парсинга settings.json\n");
+        log_errf("Ошибка парсинга settings.json\n");
         settings_apply_defaults(&g_app.settings);
         return false;
     }

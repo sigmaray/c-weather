@@ -3,6 +3,7 @@
 #include "compat.h"
 #include "history.h"
 #include "http.h"
+#include "log.h"
 #include "settings.h"
 
 #include "../third_party/cJSON.h"
@@ -138,9 +139,10 @@ bool fetch_coordinates_by_city(const char *city, const char *country,
         return false;
     }
 
+    /* Open-Meteo: narrow with "name=City,Country" (not undocumented country=). */
     char url[MAX_URL];
     snprintf(url, sizeof(url),
-             "https://geocoding-api.open-meteo.com/v1/search?name=%s&country=%s"
+             "https://geocoding-api.open-meteo.com/v1/search?name=%s,%s"
              "&count=10&language=en",
              enc_city, enc_country);
 
@@ -386,11 +388,11 @@ bool initialize_location(void) {
 
     /* City+country mode: resolve coords at runtime only — do not persist them. */
     if (s->has_city && s->has_country) {
-        fprintf(stderr, "Определение координат для %s, %s...\n", s->city,
-                s->country);
+        log_errf("Определение координат для %s, %s...\n", s->city,
+                 s->country);
         LocationData loc;
         if (!fetch_coordinates_by_city(s->city, s->country, &loc)) {
-            fprintf(stderr, "Не удалось определить координаты\n");
+            log_errf("Не удалось определить координаты\n");
             return false;
         }
         g_app.latitude = loc.latitude;
@@ -407,10 +409,10 @@ bool initialize_location(void) {
             settings_save();
         }
 
-        fprintf(stderr, "Координаты определены: %f, %f\n", g_app.latitude,
-                g_app.longitude);
-        fprintf(stderr, "Местоположение: %s, %s\n", g_app.city_name,
-                g_app.country_name);
+        log_errf("Координаты определены: %f, %f\n", g_app.latitude,
+                 g_app.longitude);
+        log_errf("Местоположение: %s, %s\n", g_app.city_name,
+                 g_app.country_name);
         return true;
     }
 
@@ -418,8 +420,8 @@ bool initialize_location(void) {
         g_app.latitude = s->latitude;
         g_app.longitude = s->longitude;
         g_app.has_coords = true;
-        fprintf(stderr, "Используются координаты: %f, %f\n", g_app.latitude,
-                g_app.longitude);
+        log_errf("Используются координаты: %f, %f\n", g_app.latitude,
+                 g_app.longitude);
 
         if (s->has_city && s->has_country) {
             snprintf(g_app.city_name, sizeof(g_app.city_name), "%s", s->city);
@@ -433,13 +435,13 @@ bool initialize_location(void) {
                          loc.city_name);
                 snprintf(g_app.country_name, sizeof(g_app.country_name), "%s",
                          loc.country_name);
-                fprintf(stderr, "Местоположение обновлено по координатам: %s, %s\n",
-                        g_app.city_name, g_app.country_name);
+                log_errf("Местоположение обновлено по координатам: %s, %s\n",
+                         g_app.city_name, g_app.country_name);
             }
         }
         return true;
     }
 
-    fprintf(stderr, "Не указаны ни координаты, ни город и страна\n");
+    log_errf("Не указаны ни координаты, ни город и страна\n");
     return false;
 }

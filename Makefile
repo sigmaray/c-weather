@@ -70,6 +70,7 @@ endif
 SRCS := \
 	src/main.c \
 	src/http.c \
+	src/log.c \
 	src/history.c \
 	src/settings.c \
 	src/weather.c \
@@ -83,6 +84,7 @@ OBJS := $(SRCS:.c=.o)
 # Library objects used by unit tests (no main/ui/tray).
 TEST_LIB_SRCS := \
 	src/http.c \
+	src/log.c \
 	src/history.c \
 	src/settings.c \
 	src/weather.c \

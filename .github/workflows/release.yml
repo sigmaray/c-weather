@@ -177,7 +177,7 @@ jobs:
           short_sha="$(echo "${GITHUB_SHA}" | cut -c1-7)"
           tag="main-${short_sha}"
           title="main @ ${short_sha}"
-          body="$(printf '%s\n\nCommit: %s\n\nPortable builds (STATIC=1):\n- Linux: AppImage (GTK/curl bundled)\n- Windows: zip with exe + MinGW DLLs\n- macOS: tar.gz with binary + bundled dylibs\n\nFull `-static` of GTK is not available from distro packages; runtime/C library and curl are linked statically where possible.\nTray: Linux uses Ayatana AppIndicator; Windows/macOS use GtkStatusIcon.' \
+          body="$(printf '%s\n\nCommit: %s\n\nPortable builds (STATIC=1):\n- Linux: AppImage (GTK/curl bundled)\n- Windows: zip with exe + MinGW DLLs + curl-ca-bundle.crt\n- macOS: tar.gz with binary + bundled dylibs\n\nFull `-static` of GTK is not available from distro packages; runtime/C library and curl are linked statically where possible.\nTray: Linux uses Ayatana AppIndicator; Windows/macOS use GtkStatusIcon.' \
             "$(git log -1 --pretty=%B)" "${GITHUB_SHA}")"
 
           ls -la dist/

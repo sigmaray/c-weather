@@ -3,6 +3,7 @@
 #include "history.h"
 #include "http.h"
 #include "icon.h"
+#include "log.h"
 #include "settings.h"
 #include "ui.h"
 #include "weather.h"
@@ -151,13 +152,13 @@ static void update_tray_loading(void) {
     g_free(temp_file);
 
     if (!icon_write_loading_png(weather_path)) {
-        fprintf(stderr, "Не удалось записать иконку загрузки\n");
+        log_errf("Не удалось записать иконку загрузки\n");
         g_free(weather_path);
         g_free(temp_path);
         return;
     }
     if (!icon_write_temp_png(temp_path, "...")) {
-        fprintf(stderr, "Не удалось записать иконку температуры\n");
+        log_errf("Не удалось записать иконку температуры\n");
     }
 
     app_indicator_set_icon_theme_path(g_tray.weather_indicator, g_tray.icon_dir);
@@ -196,11 +197,11 @@ static void update_tray_icons(void) {
     g_free(weather_file);
 
     if (!icon_write_temp_png(temp_path, temp_label)) {
-        fprintf(stderr, "Не удалось записать иконку температуры\n");
+        log_errf("Не удалось записать иконку температуры\n");
     }
     int code = g_app.weather.valid ? g_app.weather.weathercode : -1;
     if (!icon_write_weather_png(weather_path, code)) {
-        fprintf(stderr, "Не удалось записать иконку погоды\n");
+        log_errf("Не удалось записать иконку погоды\n");
     }
 
     app_indicator_set_icon_theme_path(g_tray.temp_indicator, g_tray.icon_dir);
@@ -232,7 +233,7 @@ static gboolean on_refresh_done(gpointer user_data) {
     }
 
     if (!result->ok) {
-        fprintf(stderr, "Ошибка получения погоды\n");
+        log_errf("Ошибка получения погоды\n");
         g_app.weather.valid = false;
     } else {
         g_app.weather = result->data;
@@ -305,7 +306,7 @@ static gboolean on_apply_done(gpointer user_data) {
 
     restart_update_timer();
     if (!result->weather_ok) {
-        fprintf(stderr, "Ошибка получения погоды\n");
+        log_errf("Ошибка получения погоды\n");
         g_app.weather.valid = false;
     } else {
         g_app.weather = result->weather;
@@ -520,7 +521,8 @@ static void cleanup_icon_dir(void) {
     g_rmdir(g_tray.icon_dir);
 }
 
-/* Source/log strings are UTF-8; Windows consoles default to OEM/ANSI code pages. */
+/* Source/log strings are UTF-8; Windows consoles default to OEM/ANSI code pages.
+ * log_errf uses WriteConsoleW; also set UTF-8 CP for redirected/stdio paths. */
 static void console_utf8_init(void) {
 #if defined(_WIN32) && !defined(__CYGWIN__)
     SetConsoleOutputCP(CP_UTF8);
@@ -552,7 +554,7 @@ int main(int argc, char **argv) {
     atexit(cleanup_icon_dir);
 
     if (!initialize_location()) {
-        fprintf(stderr, "Ошибка инициализации местоположения\n");
+        log_errf("Ошибка инициализации местоположения\n");
         history_add_error("Инициализация",
                           "не удалось определить местоположение", "", -1);
         update_tray_icons();

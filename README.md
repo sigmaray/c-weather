@@ -57,7 +57,7 @@ GitHub Actions:
 - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — `cppcheck`, сборка с `-Werror`, `make test` (Ubuntu gcc/clang, macOS, Windows)
 - [`.github/workflows/release.yml`](.github/workflows/release.yml) — после каждого пуша в `main` релиз с портативными артефактами (`STATIC=1`):
   - Linux: `.AppImage` (GTK/curl внутри)
-  - Windows: `.zip` (exe + MinGW DLL)
+  - Windows: `.zip` (exe + MinGW DLL + `curl-ca-bundle.crt`)
   - macOS: `.tar.gz` (бинарь + dylib)
 
 ## Настройки
