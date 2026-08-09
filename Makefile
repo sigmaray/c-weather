@@ -19,7 +19,7 @@ endif
 PKG_CFLAGS := $(shell test -n "$(PKG_CONFIG)" && $(PKG_CONFIG) --cflags gtk+-3.0 libcurl 2>/dev/null)
 
 # Full static GTK is not available from distro packages. STATIC=1 means:
-#   - static libgcc (/libstdc++/winpthread on Windows)
+#   - static libgcc on Linux/Windows (not used on macOS/Apple Clang)
 #   - on Windows: prefer static libcurl via pkg-config --static
 #   - GTK/GLib remain shared and are shipped by release packaging
 #     (AppImage / DLL zip / dylib tarball).
@@ -57,7 +57,10 @@ LDFLAGS ?=
 LIBS := $(PKG_LIBS) $(APPINDICATOR_LIBS) -lm
 
 ifeq ($(STATIC),1)
-  LDFLAGS += -static-libgcc
+  ifneq ($(UNAME_S),Darwin)
+    # Apple Clang rejects -static-libgcc; system libc is always shared on macOS.
+    LDFLAGS += -static-libgcc
+  endif
   ifeq ($(IS_WINDOWS),1)
     LDFLAGS += -static-libstdc++
     LIBS += -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic

@@ -103,7 +103,12 @@ jobs:
             --plugin gtk \
             --output appimage
 
-          built="$(ls -1 c-weather*.AppImage | head -n1)"
+          built="$(find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*' -print -quit)"
+          if [[ -z "$built" ]]; then
+            echo "AppImage not found" >&2
+            ls -la ./*.AppImage 2>/dev/null || true
+            exit 1
+          fi
           mv "$built" "$out"
           chmod +x "$out"
           echo "ASSET_NAME=$out" >> "$GITHUB_ENV"
