@@ -3,3 +3,4 @@ c-weather.exe
 *.o
 settings.json
 .vagrant/
+c-weather-tests

@@ -39,10 +39,11 @@ make STATIC=1
 
 `STATIC=1` включает `-static-libgcc` (на Windows также static libstdc++/winpthread и static libcurl, где доступно). Полностью статически слинковать GTK из дистрибутивных пакетов нельзя — в релизе GTK уезжает внутри AppImage / zip / tar.gz.
 
-Линтер:
+Линтер и тесты:
 
 ```bash
 make lint   # требует cppcheck
+make test   # unit-тесты (weather, settings, history, url_encode, icon)
 ```
 
 При первом запуске создаётся `settings.json` в текущей директории.
@@ -53,7 +54,7 @@ make lint   # требует cppcheck
 
 GitHub Actions:
 
-- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — `cppcheck`, сборка с `-Werror` (Ubuntu gcc/clang, macOS, Windows)
+- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — `cppcheck`, сборка с `-Werror`, `make test` (Ubuntu gcc/clang, macOS, Windows)
 - [`.github/workflows/release.yml`](.github/workflows/release.yml) — после каждого пуша в `main` релиз с портативными артефактами (`STATIC=1`):
   - Linux: `.AppImage` (GTK/curl внутри)
   - Windows: `.zip` (exe + MinGW DLL)

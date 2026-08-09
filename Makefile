@@ -80,7 +80,28 @@ SRCS := \
 
 OBJS := $(SRCS:.c=.o)
 
-.PHONY: all clean run lint
+# Library objects used by unit tests (no main/ui/tray).
+TEST_LIB_SRCS := \
+	src/http.c \
+	src/history.c \
+	src/settings.c \
+	src/weather.c \
+	src/icon.c \
+	third_party/cJSON.c
+
+TEST_LIB_OBJS := $(TEST_LIB_SRCS:.c=.o)
+
+TEST_SRCS := \
+	tests/run_tests.c \
+	tests/test_weather.c \
+	tests/test_settings.c \
+	tests/test_history.c \
+	tests/test_http.c \
+	tests/test_icon.c
+
+TEST_OBJS := $(TEST_SRCS:.c=.o)
+
+.PHONY: all clean run lint test
 
 all: c-weather
 
@@ -90,8 +111,17 @@ c-weather: $(OBJS)
 %.o: %.c
 	$(CC) $(ALL_CFLAGS) -c -o $@ $<
 
+tests/%.o: tests/%.c
+	$(CC) $(ALL_CFLAGS) -Itests -c -o $@ $<
+
 run: c-weather
 	./c-weather
+
+test: c-weather-tests
+	./c-weather-tests
+
+c-weather-tests: $(TEST_OBJS) $(TEST_LIB_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $(TEST_OBJS) $(TEST_LIB_OBJS) $(LIBS)
 
 lint:
 	cppcheck --error-exitcode=1 --enable=warning,style,performance,portability \
@@ -99,4 +129,5 @@ lint:
 		-I include -I src -I third_party src/
 
 clean:
-	rm -f $(OBJS) src/appindicator_stub.o c-weather c-weather.exe
+	rm -f $(OBJS) $(TEST_OBJS) src/appindicator_stub.o \
+		c-weather c-weather.exe c-weather-tests c-weather-tests.exe
