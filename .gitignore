@@ -1,3 +1,5 @@
 c-weather
+c-weather.exe
 *.o
 settings.json
+.vagrant/

@@ -17,6 +17,11 @@
 #include <time.h>
 #include <unistd.h>
 
+#if defined(_WIN32) && !defined(__CYGWIN__)
+#include <locale.h>
+#include <windows.h>
+#endif
+
 AppState g_app;
 
 typedef struct {
@@ -515,12 +520,23 @@ static void cleanup_icon_dir(void) {
     g_rmdir(g_tray.icon_dir);
 }
 
+/* Source/log strings are UTF-8; Windows consoles default to OEM/ANSI code pages. */
+static void console_utf8_init(void) {
+#if defined(_WIN32) && !defined(__CYGWIN__)
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+    setlocale(LC_CTYPE, ".UTF-8");
+#endif
+}
+
 int main(int argc, char **argv) {
     memset(&g_app, 0, sizeof(g_app));
     memset(&g_tray, 0, sizeof(g_tray));
     g_mutex_init(&g_net_mutex);
 
     gtk_init(&argc, &argv);
+    /* After gtk_init: it may touch locale; keep console on UTF-8 for RU logs. */
+    console_utf8_init();
     http_global_init();
 
     char cwd[MAX_STR];

@@ -47,7 +47,7 @@ make lint   # требует cppcheck
 
 При первом запуске создаётся `settings.json` в текущей директории.
 
-Трей (Ayatana AppIndicator) работает на **Linux**. Сборка на macOS и Windows поддерживается через stub AppIndicator (бинарь линкуется, иконка в трее не появляется).
+Трей: на **Linux** — Ayatana AppIndicator; на **Windows** и **macOS** — `GtkStatusIcon` (NotifyIcon / menu bar) через совместимый backend в `appindicator_stub.c`.
 
 ## CI
 
@@ -108,7 +108,7 @@ c-weather/
     ├── icon.c              # PNG-иконки (Cairo)
     ├── ui.c                # GTK-диалоги
     ├── compat.h            # POSIX-совместимость (Windows)
-    └── appindicator_stub.c # stub AppIndicator для macOS/Windows
+    └── appindicator_stub.c # GtkStatusIcon-backend AppIndicator для macOS/Windows
 ```
 
 ## Лицензия

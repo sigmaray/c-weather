@@ -5,7 +5,6 @@
 #include <time.h>
 
 #if defined(_WIN32) && !defined(__CYGWIN__)
-#include <string.h>
 #ifndef strcasecmp
 #define strcasecmp _stricmp
 #endif
