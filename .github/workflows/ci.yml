@@ -19,7 +19,7 @@ jobs:
       - name: Run cppcheck
         run: make lint
 
-  build:
+  build-unix:
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -35,13 +35,6 @@ jobs:
           - name: macos
             os: macos-latest
             cc: clang
-          - name: windows
-            os: windows-latest
-            cc: gcc
-
-    defaults:
-      run:
-        shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -63,8 +56,21 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install gtk+3 curl pkg-config
 
-      - name: Setup MSYS2 (Windows)
-        if: runner.os == 'Windows'
+      - name: Build
+        env:
+          CC: ${{ matrix.cc }}
+          CFLAGS: -O2 -Werror
+        run: |
+          make clean
+          make
+
+  build-windows:
+    name: Build (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -77,8 +83,9 @@ jobs:
             mingw-w64-x86_64-curl
 
       - name: Build
+        shell: msys2 {0}
         env:
-          CC: ${{ matrix.cc }}
+          CC: gcc
           CFLAGS: -O2 -Werror
         run: |
           make clean

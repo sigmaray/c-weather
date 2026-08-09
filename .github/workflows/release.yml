@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-unix:
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -19,12 +19,6 @@ jobs:
             os: ubuntu-latest
           - name: macos
             os: macos-latest
-          - name: windows
-            os: windows-latest
-
-    defaults:
-      run:
-        shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -49,24 +43,9 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install gtk+3 curl pkg-config
 
-      - name: Setup MSYS2 (Windows)
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            make
-            zip
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-gtk3
-            mingw-w64-x86_64-curl
-
       - name: Build (static-preferring link)
         env:
           CFLAGS: -O2 -Werror
-          STATIC: "1"
         run: |
           make clean
           make STATIC=1
@@ -125,8 +104,42 @@ jobs:
           tar -C dist-macos -czf "$out" .
           echo "ASSET_NAME=$out" >> "$GITHUB_ENV"
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET_NAME }}
+          path: ${{ env.ASSET_NAME }}
+          if-no-files-found: error
+
+  build-windows:
+    name: Build (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            zip
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-gtk3
+            mingw-w64-x86_64-curl
+
+      - name: Build (static-preferring link)
+        shell: msys2 {0}
+        env:
+          CFLAGS: -O2 -Werror
+        run: |
+          make clean
+          make STATIC=1
+
       - name: Package Windows zip
-        if: runner.os == 'Windows'
+        shell: msys2 {0}
         run: |
           set -euo pipefail
           out="c-weather-windows-x86_64.zip"
@@ -145,7 +158,7 @@ jobs:
 
   release:
     name: Create release
-    needs: build
+    needs: [build-unix, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
